@@ -1,0 +1,5 @@
+{
+  "vis_model_path":  "D:\\project\\siglip",
+  "embedding_model_path": "D:\\project\\clip-vit-base-patch16",
+  "model_LLM_path": "D:\\project\\MiniCPM-V-main\\ckpt"
+}
