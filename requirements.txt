@@ -1,6 +1,5 @@
 einops
 fastapi
-pytorch==2.1.2
 markdown2[all]
 sentencepiece
 tokenizers==0.15.0
