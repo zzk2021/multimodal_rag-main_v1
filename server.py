@@ -91,7 +91,7 @@ def unrar(zip_file, output=None):
     rf = rarfile.RarFile(zip_file)
     rf.extractall(output)
 
-def respond(_app_cfg, _chat_bot):
+def respond(_app_cfg, _chat_bot, image_folder, text_folder):
     if _app_cfg['file'] is None:
         _app_cfg['ret'] = "您还没上传任何文件"
         return '', _app_cfg, _chat_bot
@@ -106,7 +106,7 @@ def respond(_app_cfg, _chat_bot):
 
     if _app_cfg['ret'] is not None and not isinstance(_app_cfg['ret'], str):
         _app_cfg['ret']["client"].close()
-    code, message = get_retriever_engine("storage/decompress")
+    code, message = get_retriever_engine("storage/decompress", image_folder, text_folder)
     if code == 200:
         _app_cfg['ret'] = message
         _app_cfg['message'] = "success"
@@ -115,6 +115,7 @@ def respond(_app_cfg, _chat_bot):
     else:
         _app_cfg['ret'] = None
         _app_cfg['message'] = message
+
         _chat_bot.append(('', '知识库更新失败，原因：%s'%message))
         return message, _app_cfg, _chat_bot
 
@@ -184,8 +185,8 @@ def respond1(message, _chat_bot, _app_cfg, prompt):
     return gr.MultimodalTextbox(interactive=True, file_types=["image"],
                                       placeholder="输入消息或者上传图片", show_label=False), _chat_bot, _app_cfg
 
-def regenerate_button_clicked( _chat_bot, _app_cfg):
-    message, app_session,_chat_bot = respond(_app_cfg, _chat_bot)
+def regenerate_button_clicked( _chat_bot, _app_cfg, image_folder, text_folder):
+    message, app_session,_chat_bot = respond(_app_cfg, _chat_bot, image_folder, text_folder)
     return _chat_bot, app_session
 
 def delete_know_base(_app_cfg, _chat_bot):
@@ -211,6 +212,14 @@ with gr.Blocks() as funclip_service:
             rmkonwbase = create_component({'value': '删除知识库'})
 
         with gr.Column():
+            image_folder = gr.Textbox(label="image_folder",
+                                value="图像",
+                                interactive=True)
+
+            text_folder = gr.Textbox(label="text_folder",
+                                value="文本",
+                                interactive=True)
+        with gr.Column():
             prompt = gr.Textbox(label="prompt",
                                 value="根据上下和图片给出简短的回答。文本中分号后面括号里为图片坐标，一个二维坐标(x,y)，表示图中主要物体相对中心点的水平坐标，供参考。",
                                 interactive=True)
@@ -224,7 +233,7 @@ with gr.Blocks() as funclip_service:
 
     konwbase.click(
         regenerate_button_clicked,
-       [chat_bot, app_session],
+       [chat_bot, app_session, image_folder, text_folder],
         [chat_bot, app_session]
     )
     rmkonwbase.click(
