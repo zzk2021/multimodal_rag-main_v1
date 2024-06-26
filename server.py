@@ -7,11 +7,16 @@ from gradio.data_classes import FileData
 from build_rag import retrieve, get_retriever_engine, retrieve_image_to_image
 from PIL import Image
 import numpy as np
-
+import sys
 from model_LLM import OurLLM, MiniCPM, MobileVLM
 
-model_name = "MiniCPM2"
-llm = MobileVLM()
+
+model_name = sys.argv[1]
+if model_name == "MobileVLM":
+    llm = MobileVLM()
+elif model_name == "MiniCPM":
+    llm = MiniCPM()
+
 def complex_analysis(retriever_engine_dict,query_str, image, image_file_name):
     retriever_engine = retriever_engine_dict["retriever_engine"]
     img, txt = retrieve(retriever_engine, query_str)
