@@ -1,4 +1,5 @@
 # multimodal_rag
+
 download https://huggingface.co/google/siglip-so400m-patch14-384
 
 change config/config.json for vis_model_path and model_LLM_path
