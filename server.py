@@ -118,7 +118,7 @@ def respond(_app_cfg, _chat_bot):
         _chat_bot.append(('', '知识库更新失败，原因：%s'%message))
         return message, _app_cfg, _chat_bot
 
-def respond1(message, _chat_bot, _app_cfg):
+def respond1(message, _chat_bot, _app_cfg, prompt):
     if _app_cfg['ctx'] is None:
         _app_cfg['ctx'] = []
 
@@ -164,7 +164,7 @@ def respond1(message, _chat_bot, _app_cfg):
 
     _knowledge, img, img_path = complex_analysis(_app_cfg['ret'], _question, base64_str, image_file_name)
     try:
-        _answer = call_LLM("上下文是:"+_knowledge +"。问题是：" +_question+"根据上下和图片给出简短的回答。文本中分号后面括号里为图片坐标，一个二维坐标(x,y)，表示图中主要物体相对中心点的水平坐标，供参考。", img_path)
+        _answer = call_LLM("上下文是:"+_knowledge +"。问题是：" +_question + prompt, img_path)
     except Exception as e:
         _answer = "调用大模型出现错误，错误原因: %s"%(e.__str__())
 
@@ -209,9 +209,14 @@ with gr.Blocks() as funclip_service:
             bt_file = gr.File(label="上传知识库 .zip 格式文件")
             konwbase = create_component({'value': '向量化'})
             rmkonwbase = create_component({'value': '删除知识库'})
+
         with gr.Column():
+            prompt = gr.Textbox(label="prompt",
+                                value="根据上下和图片给出简短的回答。文本中分号后面括号里为图片坐标，一个二维坐标(x,y)，表示图中主要物体相对中心点的水平坐标，供参考。",
+                                interactive=True)
             chat_input = gr.MultimodalTextbox(interactive=True, file_types=["image"],
                                       placeholder="输入消息或者上传图片", show_label=False)
+
     with gr.Column():
         with gr.Row():
             app_session = gr.State({'sts': None, 'ctx': None, 'img': None,'ret':None,'file':None})
@@ -229,7 +234,7 @@ with gr.Blocks() as funclip_service:
     )
     chat_input.submit(
         respond1,
-        [chat_input, chat_bot, app_session],
+        [chat_input, chat_bot, app_session, prompt],
         [chat_input, chat_bot, app_session]
     )
     bt_file.upload(lambda: None, None, chat_bot, queue=False).then(upload_img,
@@ -237,4 +242,4 @@ with gr.Blocks() as funclip_service:
                                                                   outputs=[chat_bot, app_session])
 
 if __name__ == '__main__':
-    funclip_service.launch(share=True)
+    funclip_service.launch(share=False)
