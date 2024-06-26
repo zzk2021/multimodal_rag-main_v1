@@ -79,7 +79,7 @@ def get_retriever_engine_from_local():
         return 201, e
     return 200, {"retriever_engine":retriever_engine, "client": client}
 
-def get_retriever_engine(path, align=["图片","坐标"]):
+def get_retriever_engine(path, image_folder, text_folder):
     file_list = get_all_files(path)
     try:
         client = qdrant_client.QdrantClient(path="qdrant_mm_db")
@@ -87,10 +87,14 @@ def get_retriever_engine(path, align=["图片","坐标"]):
         Settings.embed_model = None
         documents = SimpleDirectoryReader(input_files=file_list).load_data()
 
-        if align is not None:
+        if image_folder is not None and text_folder is not None:
             for item in range(len(documents)):
-                documents[item].metadata['file_name_img'] = file_list[item].replace(align[1],align[0]).replace(".txt",".jpg")
-                documents[item].metadata['file_name_text'] = file_list[item].replace(align[0],align[1]).replace(".jpg",".txt")
+                dir_file_img = os.listdir(f"storage/decompress/{image_folder}")
+                dir_file_text = os.listdir(f"storage/decompress/{text_folder}")
+                img_lastfix = dir_file_img[-1].split(".")[-1]
+                text_lastfix = dir_file_text[-1].split(".")[-1]
+                documents[item].metadata['file_name_img'] = file_list[item].replace(text_folder, image_folder).replace(text_lastfix,img_lastfix)
+                documents[item].metadata['file_name_text'] = file_list[item].replace(image_folder, text_folder).replace(img_lastfix,text_lastfix)
 
         parser = SentenceSplitter()
         nodes = parser.get_nodes_from_documents(documents)
@@ -115,6 +119,7 @@ def get_retriever_engine(path, align=["图片","坐标"]):
         )
 
     except Exception as e:
+        client.close()
         return 201, e
     return 200, {"retriever_engine":retriever_engine, "client": client}
 
