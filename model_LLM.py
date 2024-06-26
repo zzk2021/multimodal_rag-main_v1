@@ -8,10 +8,17 @@ from llama_index.core.llms import CustomLLM
 from llama_index.core.llms.callbacks import llm_completion_callback
 from transformers import TextStreamer, AutoModel, AutoTokenizer, LlamaTokenizer, LlamaForCausalLM
 
+from LLM.MobileVLM.mobilevlm.conversation import SeparatorStyle
 from LLM.mipha.constants import IMAGE_TOKEN_INDEX, DEFAULT_IM_START_TOKEN, DEFAULT_IMAGE_TOKEN, DEFAULT_IM_END_TOKEN
 from LLM.mipha.conversation import conv_templates
 from LLM.mipha.mm_utils import tokenizer_image_token, process_images, KeywordsStoppingCriteria
 from LLM.mipha.model.builder import load_pretrained_model
+from LLM.MobileVLM.mobilevlm.model.mobilevlm import load_pretrained_model as load_pretrained_model_mobileVLM
+from LLM.MobileVLM.mobilevlm.conversation import conv_templates as conv_templates_mobileVLM
+from LLM.MobileVLM.mobilevlm.utils import process_images as process_images_mobileVLM
+from LLM.MobileVLM.mobilevlm.utils import tokenizer_image_token as tokenizer_image_token_mobileVLM
+from LLM.MobileVLM.mobilevlm.utils import KeywordsStoppingCriteria as KeywordsStoppingCriteria_mobileVLM
+from LLM.MobileVLM.mobilevlm.utils import disable_torch_init
 from LLM.mipha.serve.cli import load_image
 
 with open('config/config.json') as user_file:
@@ -29,34 +36,20 @@ DEFAULT_LLM_MODEL = config["model_LLM_path"]
 class MobileVLM():
     def __init__(self, model_path=DEFAULT_LLM_MODEL):
         super().__init__()
-        self.tokenizer = LlamaTokenizer.from_pretrained(model_path)
-        self.model = LlamaForCausalLM.from_pretrained(
-            model_path, torch_dtype=torch.float16, device_map='auto',
-        )
+        model_name = model_path.split('/')[-1]
+        print(model_path)
+        disable_torch_init()
+        tokenizer, model, image_processor, context_len = load_pretrained_model_mobileVLM(model_path, False,
+                                                                               False)
+        self.tokenizer = tokenizer
+        self.model = model
+        self.image_processor = image_processor
+        self.context_len = context_len
 
-        from scripts.inference import inference_once
-        # model_path = "mtgv/MobileVLM-1.7B" # MobileVLM
-        model_path = "mtgv/MobileVLM_V2-1.7B"  # MobileVLM V2
-        image_file = "assets/samples/demo.jpg"
-        prompt_str = "Who is the author of this book?\nAnswer the question using a single word or phrase."
-        # (or) What is the title of this book?
-        # (or) Is this book related to Education & Teaching?
-
-        args = type('Args', (), {
-            "model_path": model_path,
-            "image_file": image_file,
-            "prompt": prompt_str,
-            "conv_mode": "v1",
-            "temperature": 0,
-            "top_p": None,
-            "num_beams": 1,
-            "max_new_tokens": 512,
-            "load_8bit": False,
-            "load_4bit": False,
-        })()
-
-        inference_once(args)
-
+        self.temperature = 0
+        self.top_p =  None
+        self.num_beams = 1
+        self.max_new_tokens = 512
     @property
     def metadata(self) -> LLMMetadata:
         """Get LLM metadata."""
@@ -75,18 +68,45 @@ class MobileVLM():
     def chat(self, prompt, **kwargs: Any) -> ChatResponse:
         # 完成函数
         prompt, image = prompt[0], prompt[1]
-        msgs = [{"content": prompt, "role": "user"}]
+        conv = conv_templates_mobileVLM["v1"].copy()
+        print(image)
         if image is not None:
-            image = Image.open(image).convert("RGB")
-        answer = self.model.chat(
-            image=image,
-            msgs=msgs,
-            context=None,
-            tokenizer=self.tokenizer,
-            sampling=True,
-            temperature=0.7
-        )
-        return answer
+            images = [Image.open(image).convert("RGB")]
+            images_tensor = process_images_mobileVLM(images, self.image_processor,self.model.config).to(self.model.device, dtype=torch.float16)
+            conv.append_message(conv.roles[0], DEFAULT_IMAGE_TOKEN + "\n" + prompt)
+        else:
+            images_tensor = None
+            conv.append_message(conv.roles[0],  prompt)
+        conv.append_message(conv.roles[1], None)
+        prompt = conv.get_prompt()
+        stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
+        # Input
+        input_ids = (
+            tokenizer_image_token_mobileVLM(prompt, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt").unsqueeze(0).cuda())
+        stopping_criteria = KeywordsStoppingCriteria_mobileVLM([stop_str], self.tokenizer, input_ids)
+
+        with torch.inference_mode():
+            output_ids = self.model.generate(
+                input_ids,
+                images=images_tensor,
+                do_sample=True if self.temperature > 0 else False,
+                temperature=self.temperature,
+                top_p=self.top_p,
+                num_beams=self.num_beams,
+                max_new_tokens=self.max_new_tokens,
+                use_cache=True,
+                stopping_criteria=[stopping_criteria],
+            )
+        # Result-Decode
+        input_token_len = input_ids.shape[1]
+        n_diff_input_output = (input_ids != output_ids[:, :input_token_len]).sum().item()
+        if n_diff_input_output > 0:
+            print(f"[Warning] {n_diff_input_output} output_ids are not the same as the input_ids")
+        outputs = self.tokenizer.batch_decode(output_ids[:, input_token_len:], skip_special_tokens=True)[0]
+        outputs = outputs.strip()
+        if outputs.endswith(stop_str):
+            outputs = outputs[: -len(stop_str)]
+        return outputs.strip()
 
     @llm_completion_callback()
     def stream_complete(

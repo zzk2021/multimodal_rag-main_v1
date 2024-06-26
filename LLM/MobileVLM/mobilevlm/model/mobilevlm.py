@@ -2,9 +2,9 @@ import torch
 import torch.nn as nn
 from abc import ABC, abstractmethod
 from transformers import AutoTokenizer, BitsAndBytesConfig
-from mobilevlm.model.vision_encoder import build_vision_tower
-from mobilevlm.model.vision_projector import build_vision_projector
-from mobilevlm.constants import IGNORE_INDEX, IMAGE_TOKEN_INDEX, \
+from LLM.MobileVLM.mobilevlm.model.vision_encoder import build_vision_tower
+from LLM.MobileVLM.mobilevlm.model.vision_projector import build_vision_projector
+from LLM.MobileVLM.mobilevlm.constants import IGNORE_INDEX, IMAGE_TOKEN_INDEX, \
     DEFAULT_IMAGE_PATCH_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN
 
 
@@ -254,7 +254,7 @@ class MobileVLMMetaForCausalLM(ABC):
 
 def load_pretrained_model(model_path, load_8bit=False, load_4bit=False, device_map="auto", device="cuda"):
 
-    from mobilevlm.model.mobilellama import MobileLlamaForCausalLM
+    from LLM.MobileVLM.mobilevlm.model.mobilellama import MobileLlamaForCausalLM
 
     kwargs = {"device_map": device_map}
 
@@ -270,7 +270,6 @@ def load_pretrained_model(model_path, load_8bit=False, load_4bit=False, device_m
         )
     else:
         kwargs['torch_dtype'] = torch.float16
-
     tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False)
     model = MobileLlamaForCausalLM.from_pretrained(model_path, low_cpu_mem_usage=True, **kwargs)
 

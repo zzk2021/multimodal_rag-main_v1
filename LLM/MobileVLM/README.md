@@ -125,7 +125,7 @@ print(tokenizer.decode(generation_output[0]))
 ```python
 from scripts.inference import inference_once
 # model_path = "mtgv/MobileVLM-1.7B" # MobileVLM
-model_path = "mtgv/MobileVLM_V2-1.7B" # MobileVLM V2
+model_path = "D:\project\MobileVLM_V2-1.7B" # MobileVLM V2
 image_file = "assets/samples/demo.jpg"
 prompt_str = "Who is the author of this book?\nAnswer the question using a single word or phrase."
 # (or) What is the title of this book?

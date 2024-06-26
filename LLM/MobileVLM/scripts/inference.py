@@ -6,10 +6,10 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).parent.parent.resolve()))
 
-from mobilevlm.model.mobilevlm import load_pretrained_model
-from mobilevlm.conversation import conv_templates, SeparatorStyle
-from mobilevlm.utils import disable_torch_init, process_images, tokenizer_image_token, KeywordsStoppingCriteria
-from mobilevlm.constants import IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN
+from LLM.MobileVLM.mobilevlm.model.mobilevlm import load_pretrained_model
+from LLM.MobileVLM.mobilevlm.conversation import conv_templates, SeparatorStyle
+from LLM.MobileVLM.mobilevlm.utils import disable_torch_init, process_images, tokenizer_image_token, KeywordsStoppingCriteria
+from LLM.MobileVLM.mobilevlm.constants import IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN
 
 
 def inference_once(args):

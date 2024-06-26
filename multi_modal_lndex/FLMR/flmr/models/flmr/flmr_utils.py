@@ -22,7 +22,6 @@ def get_default_group():
 def colbert_score_reduce(scores_padded, D_mask):
     # print('D_mask', D_mask.shape, D_mask)
     D_padding = ~D_mask.view(scores_padded.size(0), scores_padded.size(1)).bool()
-    print(":sum",torch.sum(~D_padding) // 2)
     # print('D_padding', D_padding.shape, D_padding)
     # print(D_padding[0].tolist())
     scores_padded[D_padding] = -9999
@@ -46,9 +45,6 @@ def colbert_score(Q, D_padded, D_mask, use_gpu=False):
     assert Q.size(0) in [1, D_padded.size(0)]
 
     scores = D_padded @ Q.to(dtype=D_padded.dtype).permute(0, 2, 1)
-    print(scores.shape)
-    print(D_padded.shape)
-    print(Q.shape)
     return colbert_score_reduce(scores, D_mask)
 
 
