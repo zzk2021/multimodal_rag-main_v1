@@ -57,7 +57,7 @@ class MultiModalVectorStoreIndex(VectorStoreIndex):
         self,
         nodes: Optional[Sequence[BaseNode]] = None,
         index_struct: Optional[MultiModelIndexDict] = None,
-        embed_model: Optional[BaseEmbedding | HuggingFaceEmbedding] = None,
+        embed_model: Optional [HuggingFaceEmbedding] = None,
         storage_context: Optional[StorageContext] = None,
         use_async: bool = False,
         store_nodes_override: bool = False,
@@ -166,21 +166,16 @@ class MultiModalVectorStoreIndex(VectorStoreIndex):
     @classmethod
     def from_vector_store(
         cls,
-        vector_store: VectorStore,
+        vector_store: VectorStore = None,
         embed_model: Optional[EmbedType] = None,
         # deprecated
         service_context: Optional[ServiceContext] = None,
         # Image-related kwargs
         image_vector_store: Optional[VectorStore] = None,
         image_embed_model: EmbedType = "clip",
+        storage_context : Optional[StorageContext] = None,
         **kwargs: Any,
     ) -> "VectorStoreIndex":
-        if not vector_store.stores_text:
-            raise ValueError(
-                "Cannot initialize from a vector store that does not store text."
-            )
-
-        storage_context = StorageContext.from_defaults(vector_store=vector_store)
         return cls(
             nodes=[],
             service_context=service_context,

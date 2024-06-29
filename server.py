@@ -4,7 +4,7 @@ import gradio as gr
 from gradio.components.chatbot import FileMessage
 from gradio.data_classes import FileData
 
-from build_rag import retrieve, get_retriever_engine, retrieve_image_to_image
+from build_rag import retrieve, get_retriever_engine, retrieve_image_to_image, get_retriever_engine_from_local
 from PIL import Image
 import numpy as np
 import sys
@@ -52,7 +52,6 @@ def call_LLM(prompt, image_path,image=None):
 import base64
 import io
 import os.path
-import rarfile
 import gradio as gr
 
 from PIL import Image
@@ -61,12 +60,10 @@ import zipfile
 def upload_img(file, _chatbot, _app_session):
     _app_session['sts'] = None
     _app_session['ctx'] = []
-
     with open(file, 'rb') as f1:
         base64_str = base64.b64encode(f1.read()) # str类型
     _app_session['file'] = base64_str
     _app_session['file_name'] = os.path.basename(file)
-
     return _chatbot, _app_session
 
 def unzip(zip_file, output=None):
@@ -87,9 +84,20 @@ def unzip(zip_file, output=None):
             zip_info.filename = zip_info.filename.encode('cp437').decode('gbk')
             zip_ref.extract(zip_info, output)
 
-def unrar(zip_file, output=None):
-    rf = rarfile.RarFile(zip_file)
-    rf.extractall(output)
+
+def load_knowledge(_app_cfg, _chat_bot):
+    code, message = get_retriever_engine_from_local()
+    if code == 200:
+        _app_cfg['ret'] = message
+        _app_cfg['message'] = "success"
+        _chat_bot.append(('', '知识库更新成功，现在你可以和我聊天啦！'))
+        return "success", _app_cfg, _chat_bot
+    else:
+        _app_cfg['ret'] = None
+        _app_cfg['message'] = message
+
+        _chat_bot.append(('', '知识库更新失败，原因：%s' % message))
+        return message, _app_cfg, _chat_bot
 
 def respond(_app_cfg, _chat_bot, image_folder, text_folder):
     if _app_cfg['file'] is None:
@@ -101,8 +109,6 @@ def respond(_app_cfg, _chat_bot, image_folder, text_folder):
         f1.write(debase)  # str类型
     if _app_cfg["file_name"].endswith(".zip"):
         unzip("storage/"+_app_cfg["file_name"],"storage/decompress")
-    if _app_cfg["file_name"].endswith(".rar"):
-        unrar("storage/"+_app_cfg["file_name"],"storage/decompress")
 
     if _app_cfg['ret'] is not None and not isinstance(_app_cfg['ret'], str):
         _app_cfg['ret']["client"].close()
@@ -120,6 +126,9 @@ def respond(_app_cfg, _chat_bot, image_folder, text_folder):
         return message, _app_cfg, _chat_bot
 
 def respond1(message, _chat_bot, _app_cfg, prompt):
+
+
+
     if _app_cfg['ctx'] is None:
         _app_cfg['ctx'] = []
 
@@ -141,6 +150,9 @@ def respond1(message, _chat_bot, _app_cfg, prompt):
     print('<User>:', _question)
 
     if _app_cfg['ret'] is None:
+
+        message_by_index, _app_cfg, _chat_bot = load_knowledge(_app_cfg, _chat_bot)
+
         if image_file_name is None:
             _answer = call_LLM(_question,None)
             _app_cfg['ctx'] = _context
@@ -152,7 +164,7 @@ def respond1(message, _chat_bot, _app_cfg, prompt):
             _answer = call_LLM(_question,image_path=os.path.join("storage","cache", image_file_name),image=base64_str)
             _app_cfg['ctx'] = _context
             _app_cfg['sts'] = 200
-            _app_cfg['img']= os.path.join("storage","cache",image_file_name)
+            _app_cfg['img'] = os.path.join("storage", "cache", image_file_name)
             _context.append({"role": "assistant", "content": _answer, "img": _app_cfg['img']})
             _chat_bot.append(([_app_cfg['img'].__str__(), _question], _answer))
         print('<Assistant>:', _answer)

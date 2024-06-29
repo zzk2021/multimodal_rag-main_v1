@@ -1,4 +1,5 @@
 import os
+import traceback
 
 from PIL import Image
 from llama_index.core import ServiceContext, SimpleDirectoryReader, StorageContext, Settings
@@ -28,7 +29,6 @@ def retrieve(retriever_engine, query_str):
                         retrieved_text.append(f.read())
             break
         else:
-            print(res_node.text)
             if res_node.score > 0.5:
                 retrieved_text.append(res_node.text)
                 if "file_name_img" in res_node.node.metadata.keys():
@@ -76,8 +76,36 @@ def get_retriever_engine_from_local():
         )
 
     except Exception as e:
+        traceback.print_exc()
         return 201, e
-    return 200, {"retriever_engine":retriever_engine, "client": client}
+    return 200, {"retriever_engine":retriever_engine, "client": client, "index":index}
+
+
+def update_nodes(file_path, image_folder, text_folder, cli_json):
+    file_list = [file_path]
+    client = cli_json["client"]
+    index = cli_json["index"]
+    try:
+        documents = SimpleDirectoryReader(input_files=file_list).load_data()
+        if image_folder is not None and text_folder is not None:
+            for item in range(len(documents)):
+                dir_file_img = os.listdir(f"storage/decompress/{image_folder}")
+                dir_file_text = os.listdir(f"storage/decompress/{text_folder}")
+                img_lastfix = dir_file_img[-1].split(".")[-1]
+                text_lastfix = dir_file_text[-1].split(".")[-1]
+                documents[item].metadata['file_name_img'] = file_list[item].replace(text_folder, image_folder).replace(text_lastfix,img_lastfix)
+                documents[item].metadata['file_name_text'] = file_list[item].replace(image_folder, text_folder).replace(img_lastfix,text_lastfix)
+
+        parser = SentenceSplitter()
+        nodes = parser.get_nodes_from_documents(documents)
+        index.insert_nodes(nodes=nodes)
+        retriever_engine = index.as_retriever(
+            similarity_top_k=3, image_similarity_top_k=3
+        )
+    except Exception as e:
+        client.close()
+        return 201, e
+    return 200, {"retriever_engine":retriever_engine, "client": client, "index":index}
 
 def get_retriever_engine(path, image_folder, text_folder):
     file_list = get_all_files(path)
@@ -121,7 +149,7 @@ def get_retriever_engine(path, image_folder, text_folder):
     except Exception as e:
         client.close()
         return 201, e
-    return 200, {"retriever_engine":retriever_engine, "client": client}
+    return 200, {"retriever_engine":retriever_engine, "client": client,"index":index}
 
 
 
