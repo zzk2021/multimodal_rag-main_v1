@@ -1,4 +1,5 @@
 import shutil
+import traceback
 
 import gradio as gr
 from gradio.components.chatbot import FileMessage
@@ -8,14 +9,15 @@ from build_rag import retrieve, get_retriever_engine, retrieve_image_to_image, g
 from PIL import Image
 import numpy as np
 import sys
-from model_LLM import OurLLM, MiniCPM, MobileVLM
-
+from model_LLM import OurLLM, MiniCPM, MobileVLM, LLaVAHD
 
 model_name = sys.argv[1]
 if model_name == "MobileVLM":
     llm = MobileVLM()
 elif model_name == "MiniCPM":
     llm = MiniCPM()
+elif model_name == "LLaVA-HD":
+    llm = LLaVAHD()
 
 def complex_analysis(retriever_engine_dict,query_str, image, image_file_name):
     retriever_engine = retriever_engine_dict["retriever_engine"]
@@ -139,7 +141,6 @@ def respond1(message, _chat_bot, _app_cfg, prompt):
             with open(item, 'rb') as f1:
                 base64_str = base64.b64encode(f1.read()) # str类型
                 image_file_name = os.path.basename(item)
-
     _question = message["text"]
     _context = _app_cfg['ctx'].copy()
     if _context:
@@ -178,11 +179,9 @@ def respond1(message, _chat_bot, _app_cfg, prompt):
     try:
         _answer = call_LLM("上下文是:"+_knowledge +"。问题是：" +_question + prompt, img_path)
     except Exception as e:
+        traceback.print_exc()
         _answer = "调用大模型出现错误，错误原因: %s"%(e.__str__())
-
     _context.append({"role": "assistant", "content": _answer,"img": os.path.relpath(img_path) if img_path is not None else None})
-
-
     _app_cfg['ctx'] = _context
     _app_cfg['sts'] = 200
     _app_cfg['img'] = os.path.relpath(img_path) if img_path is not None else None
