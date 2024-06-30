@@ -22,32 +22,42 @@ def complex_analysis(retriever_engine_dict,query_str, image, image_file_name):
     img, txt = retrieve(retriever_engine, query_str)
 
     if image is not None and img == []:
+        # image 检索image只取image检索结果，忽略文本检索结果
         image = Image.open(io.BytesIO(base64.b64decode(image))).convert('RGB')
         # 保存Image对象为文件
         image.save("storage/cache/%s" % (image_file_name))
-        img1 = retrieve_image_to_image(retriever_engine, "storage/cache/%s"%(image_file_name))
-        set1 = set(img1)
-        set2 = set(img)
-        union_set = set1.union(set2)
-        img = list(union_set)
+        img1, txt1 = retrieve_image_to_image(retriever_engine, "storage/cache/%s"%(image_file_name))
+        img = img.extend(img1)
+        txt = txt.extend(txt1)
+
+    # 只取排序后每个子列表的第一个元素
 
     if txt != []:
-        context_str = ";".join(txt)
+        txt = sorted(txt, key=lambda x: x[1], reverse=True)
+        print(txt)
+        txt = [item[0] for item in txt][0]
+        context_str = txt
     else:
         context_str = "没有上下文，直接回答"
 
     if img == []:
         return  context_str, None, None
+
+    img = sorted(img, key=lambda x: x[1], reverse=True)
+    print(img)
+    img = [item[0] for item in img]
     return context_str, img, img[0]
 
 def call_LLM(prompt, image_path,image=None):
     if image is not None:
         image = Image.open(io.BytesIO(base64.b64decode(image))).convert('RGB')
         image.save(image_path)
-
-    response = llm.chat({0: prompt, 1:image_path}).replace("<|endoftext|>","")
+    if model_name == "MiniCPM2":
+        response = llm.chat({0: prompt, 1:image_path})[0]
+        response = response.replace("<|endoftext|>","")
+    else:
+        response = llm.chat({0: prompt, 1:image_path}).replace("<|endoftext|>","")
     return response
-
 
 import base64
 import io
@@ -70,22 +80,16 @@ def unzip(zip_file, output=None):
     """解压zip文件"""
     if not os.path.exists(output):
         os.mkdir(output)
-    #zip = zipfile.ZipFile(zip_file)
     output = output or os.path.dirname(zip_file)  # 默认解压到当前目录同名文件夹中
-    # 返回所有文件夹和文件
-    #zip_list = zip.namelist()
-    #zip_list_new = []
-    # 确保输出目录存在
-
-    # 打开 ZIP 文件
     with zipfile.ZipFile(zip_file, 'r') as zip_ref:
         for zip_info in zip_ref.infolist():
             # 解决中文文件名乱码问题
             zip_info.filename = zip_info.filename.encode('cp437').decode('gbk')
             zip_ref.extract(zip_info, output)
 
-
 def load_knowledge(_app_cfg, _chat_bot):
+    if _app_cfg['ret'] is not None:
+        _app_cfg['ret']['client'].close()
     code, message = get_retriever_engine_from_local()
     if code == 200:
         _app_cfg['ret'] = message
@@ -95,7 +99,6 @@ def load_knowledge(_app_cfg, _chat_bot):
     else:
         _app_cfg['ret'] = None
         _app_cfg['message'] = message
-
         _chat_bot.append(('', '知识库更新失败，原因：%s' % message))
         return message, _app_cfg, _chat_bot
 
@@ -121,13 +124,10 @@ def respond(_app_cfg, _chat_bot, image_folder, text_folder):
     else:
         _app_cfg['ret'] = None
         _app_cfg['message'] = message
-
         _chat_bot.append(('', '知识库更新失败，原因：%s'%message))
         return message, _app_cfg, _chat_bot
 
 def respond1(message, _chat_bot, _app_cfg, prompt):
-
-
 
     if _app_cfg['ctx'] is None:
         _app_cfg['ctx'] = []
@@ -148,11 +148,10 @@ def respond1(message, _chat_bot, _app_cfg, prompt):
         _context = [{"role": "user", "content": _question}]
 
     print('<User>:', _question)
-
     if _app_cfg['ret'] is None:
-
         message_by_index, _app_cfg, _chat_bot = load_knowledge(_app_cfg, _chat_bot)
 
+    if _app_cfg['ret'] is None:
         if image_file_name is None:
             _answer = call_LLM(_question,None)
             _app_cfg['ctx'] = _context
@@ -182,11 +181,7 @@ def respond1(message, _chat_bot, _app_cfg, prompt):
         _answer = "调用大模型出现错误，错误原因: %s"%(e.__str__())
 
     _context.append({"role": "assistant", "content": _answer,"img": os.path.relpath(img_path) if img_path is not None else None})
-    if img_path is not  None:
-        _chat_bot.append((_question, [os.path.relpath(img_path).__str__(),""]))
-        _chat_bot.append((None, _answer))
-    else:
-        _chat_bot.append((_question, _answer))
+
 
     _app_cfg['ctx'] = _context
     _app_cfg['sts'] = 200
@@ -194,6 +189,17 @@ def respond1(message, _chat_bot, _app_cfg, prompt):
     print('<Assistant>:', _answer)
     message["text"] = ""
     message['files'] = None
+
+    if img_path is not None:
+        if image_file_name is not None:
+            _chat_bot.append(([_app_cfg['img'].__str__(), ""], None))
+        _chat_bot.append((_question, [os.path.relpath(img_path).__str__(),""]))
+        _chat_bot.append((None, _answer))
+    else:
+        if image_file_name is not None:
+            _chat_bot.append(([_app_cfg['img'].__str__(), ""], None))
+        _chat_bot.append((_question, _answer))
+
     return gr.MultimodalTextbox(interactive=True, file_types=["image"],
                                       placeholder="输入消息或者上传图片", show_label=False), _chat_bot, _app_cfg
 
@@ -202,7 +208,8 @@ def regenerate_button_clicked( _chat_bot, _app_cfg, image_folder, text_folder):
     return _chat_bot, app_session
 
 def delete_know_base(_app_cfg, _chat_bot):
-    _app_cfg['ret']["client"].close()
+    if _app_cfg['ret'] is not None:
+        _app_cfg['ret']["client"].close()
     shutil.rmtree("storage/decompress")
     shutil.rmtree("qdrant_mm_db/collection")
 
@@ -233,7 +240,7 @@ with gr.Blocks() as funclip_service:
                                 interactive=True)
         with gr.Column():
             prompt = gr.Textbox(label="prompt",
-                                value="根据上下和图片给出简短的回答。文本中分号后面括号里为图片坐标，一个二维坐标(x,y)，表示图中主要物体相对中心点的水平坐标，供参考。",
+                                value="你是一个导航机器人小助手。根据信息和提问回答坐标，文本中分号后面括号里为图片坐标，一个二维坐标(x,y)，供参考。",
                                 interactive=True)
             chat_input = gr.MultimodalTextbox(interactive=True, file_types=["image"],
                                       placeholder="输入消息或者上传图片", show_label=False)

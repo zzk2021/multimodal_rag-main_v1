@@ -19,30 +19,39 @@ def retrieve(retriever_engine, query_str):
     retrieved_text = []
 
     for res_node in retrieval_results:
-        print(res_node.score)
         if isinstance(res_node.node, ImageNode):
-            print(res_node.node.metadata["file_name_img"])
             if res_node.score > 0.09:
-                retrieved_image.append(res_node.node.metadata["file_path"])
+                retrieved_image.append([res_node.node.metadata["file_path"],res_node.score])
                 if "file_name_text" in res_node.node.metadata.keys():
                     with open(res_node.node.metadata["file_name_text"], "r", encoding="utf-8") as f:
-                        retrieved_text.append(f.read())
-            break
+                        retrieved_text.append([f.read(),res_node.score])
+
         else:
             if res_node.score > 0.5:
-                retrieved_text.append(res_node.text)
+                retrieved_text.append([res_node.text,res_node.score])
                 if "file_name_img" in res_node.node.metadata.keys():
-                    retrieved_image.append(res_node.node.metadata["file_name_img"])
-            break
+                    retrieved_image.append([res_node.node.metadata["file_name_img"],res_node.score])
+
     return retrieved_image, retrieved_text
 
 def retrieve_image_to_image(retriever_engine, image):
     retrieval_results = retriever_engine.image_to_image_retrieve(image)
     retrieved_image = []
+    retrieved_text = []
     for res_node in retrieval_results:
         if isinstance(res_node.node, ImageNode):
-            retrieved_image.append(res_node.node.metadata["file_path"])
-    return retrieved_image
+            if res_node.score > 0.09:
+                retrieved_image.append([res_node.node.metadata["file_path"],res_node.score])
+                if "file_name_text" in res_node.node.metadata.keys():
+                        with open(res_node.node.metadata["file_name_text"], "r", encoding="utf-8") as f:
+                            retrieved_text.append([f.read(),res_node.score])
+        else:
+            if res_node.score > 0.5:
+                retrieved_text.append(res_node.text)
+                if "file_name_img" in res_node.node.metadata.keys():
+                    retrieved_image.append([res_node.node.metadata["file_name_img"], res_node.score])
+
+    return retrieved_image, retrieved_text
 
 def get_all_files(path):
     all_files = []
