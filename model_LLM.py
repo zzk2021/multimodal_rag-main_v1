@@ -1,4 +1,5 @@
 import json
+import re
 from typing import Optional, Any
 
 import torch
@@ -9,6 +10,7 @@ from llama_index.core.llms.callbacks import llm_completion_callback
 from transformers import TextStreamer, AutoModel, AutoTokenizer, LlamaTokenizer, LlamaForCausalLM
 
 from LLM.MobileVLM.mobilevlm.conversation import SeparatorStyle
+from LLM.SliME.llava.mm_utils import get_model_name_from_path as get_model_name_from_path_SLIME
 from LLM.mipha.constants import IMAGE_TOKEN_INDEX, DEFAULT_IM_START_TOKEN, DEFAULT_IMAGE_TOKEN, DEFAULT_IM_END_TOKEN
 from LLM.mipha.conversation import conv_templates
 from LLM.mipha.mm_utils import tokenizer_image_token, process_images, KeywordsStoppingCriteria
@@ -20,6 +22,8 @@ from LLM.MobileVLM.mobilevlm.utils import tokenizer_image_token as tokenizer_ima
 from LLM.MobileVLM.mobilevlm.utils import KeywordsStoppingCriteria as KeywordsStoppingCriteria_mobileVLM
 from LLM.MobileVLM.mobilevlm.utils import disable_torch_init
 from LLM.mipha.serve.cli import load_image
+from LLM.SliME.llava.model.builder import load_pretrained_model as load_pretrained_model_LLaVAHD
+from LLM.SliME.llava.conversation import conv_templates as conv_templates_SLIME
 
 with open('config/config.json') as user_file:
     config = user_file.read()
@@ -116,7 +120,7 @@ class MobileVLM():
 class MiniCPM(CustomLLM):
     context_window: int = 8192  # 上下文窗口大小
     num_output: int = 128  # 输出的token数量
-    model_name: str = "Mipha"  # 模型名称
+    model_name: str = "MiniCPM"  # 模型名称
     tokenizer: object = None  # 分词器
     model: object = None  # 模型
     image_processor: object = None # image_processor
@@ -156,6 +160,103 @@ class MiniCPM(CustomLLM):
             temperature=0.7
         )
         return answer
+
+    @llm_completion_callback()
+    def stream_complete(
+        self, prompt: str,image: Optional[torch.FloatTensor] = None, **kwargs: Any
+    ) -> CompletionResponseGen:
+        pass
+
+
+from LLM.SliME.llava.constants import IMAGE_PLACEHOLDER as IMAGE_PLACEHOLDER_SLIME
+from LLM.SliME.llava.mm_utils import tokenizer_image_token as tokenizer_image_token_SLIME
+class LLaVAHD(CustomLLM):
+    context_window: int = 8192  # 上下文窗口大小
+    num_output: int = 128  # 输出的token数量
+    model_name: str = "LLaVAHD"  # 模型名称
+    tokenizer: object = None  # 分词器
+    model: object = None  # 模型
+    image_processor: object = None # image_processor
+    def __init__(self, pretrained_model_name_or_path=DEFAULT_LLM_MODEL):
+        super().__init__()
+        # GPU方式加载模型
+        model_name = get_model_name_from_path_SLIME(pretrained_model_name_or_path)
+        self.model_name = model_name
+        tokenizer, model, image_processor, context_len = load_pretrained_model_LLaVAHD(pretrained_model_name_or_path, model_base=None, model_name=model_name)
+        self.tokenizer = tokenizer
+        self.model = model
+        self.image_processor = image_processor
+    @property
+    def metadata(self) -> LLMMetadata:
+        """Get LLM metadata."""
+        # 得到LLM的元数据
+        return LLMMetadata(
+            context_window=self.context_window,
+            num_output=self.num_output,
+            model_name=self.model_name,
+        )
+
+    @llm_completion_callback()  # 回调函数
+    def complete(self, prompt: str, image: str, **kwargs: Any) -> CompletionResponse:
+        pass
+
+  #  @llm_chat_callback()  # 回调函数
+    def chat(self, prompt, **kwargs: Any) -> ChatResponse:
+        # 完成函数
+        prompt, image = prompt[0], prompt[1]
+        image_token_se = DEFAULT_IM_START_TOKEN + DEFAULT_IMAGE_TOKEN + DEFAULT_IM_END_TOKEN
+        if IMAGE_PLACEHOLDER_SLIME in prompt:
+            if self.model.config.mm_use_im_start_end:
+                qs = re.sub(IMAGE_PLACEHOLDER_SLIME, image_token_se, prompt)
+            else:
+                qs = re.sub(IMAGE_PLACEHOLDER_SLIME, DEFAULT_IMAGE_TOKEN, prompt)
+        else:
+            if self.model.config.mm_use_im_start_end:
+                qs = image_token_se + "\n" + prompt
+            else:
+                qs = DEFAULT_IMAGE_TOKEN + "\n" + prompt
+
+
+        if "llama-2" in self.model_name.lower():
+            conv_mode = "llava_llama_2"
+        elif "mistral" in self.model_name.lower():
+            conv_mode = "mistral_instruct"
+        elif "v1.6-34b" in self.model_name.lower():
+            conv_mode = "chatml_direct"
+        elif "v1" in self.model_name.lower():
+            conv_mode = "llava_v1"
+        elif "mpt" in self.model_name.lower():
+            conv_mode = "mpt"
+        else:
+            conv_mode = "llava_v0"
+
+        conv = conv_templates_SLIME[conv_mode].copy()
+        conv.append_message(conv.roles[0], qs)
+        conv.append_message(conv.roles[1], None)
+        prompt = conv.get_prompt()
+        if image is not None:
+            # first message
+            image = load_image(image)
+            # image = image.resize((224, 224))
+            image_tensor = process_images([image], self.image_processor, self.model.config)
+            image_tensor = image_tensor.to(self.model.device, dtype=torch.float16)
+        else:
+            image_tensor = None
+        input_ids = tokenizer_image_token_SLIME(prompt, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt').unsqueeze(
+            0).cuda()
+        with torch.inference_mode():
+            outputs = self.model.generate(
+                input_ids,
+                images=image_tensor,
+                image_sizes = [image_tensor.shape] if image_tensor is not None else None,
+                do_sample=False,
+                temperature=0.2,
+                max_new_tokens=512,
+                num_beams=1,
+                use_cache=False,
+            )
+        outputs = self.tokenizer.batch_decode(outputs, skip_special_tokens=True)[0].strip()
+        return outputs
 
     @llm_completion_callback()
     def stream_complete(
