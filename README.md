@@ -12,6 +12,8 @@ pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https
 
 pip install -r requirements.txt
 
+
+
 ## run MobileVLM
 
 download https://huggingface.co/mtgv/MobileVLM_V2-1.7B
@@ -27,3 +29,11 @@ download https://huggingface.co/openbmb/MiniCPM-V
 change config/config.json  for model_LLM_path
 
 python server.py MiniCPM
+
+# run LLaVA-HD
+
+download https://huggingface.co/yifanzhang114/SliME-vicuna-7B
+
+change config/config.json  for model_LLM_path
+
+python server.py LLaVA-HD
