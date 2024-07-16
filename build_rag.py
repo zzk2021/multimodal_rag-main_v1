@@ -60,17 +60,33 @@ def get_all_files(path):
             all_files.append(os.path.join(root, file))
     return all_files
 
+def singleton(cls):
+    instances = {}
+    def get_instance(*args, **kwargs):
+        if cls not in instances:
+            instances[cls] = cls(*args, **kwargs)
+        return instances[cls]
+    return get_instance
+@singleton
+class Client():
+    def __init__(self):
+        self.qdrant_client = qdrant_client.QdrantClient(path="qdrant_mm_db")
+
+    def close(self):
+        self.qdrant_client.close()
+        del self.qdrant_client
+        self.qdrant_client = None
 
 def get_retriever_engine_from_local():
     try:
-        client = qdrant_client.QdrantClient(path="qdrant_mm_db")
+        client = Client()
         Settings.llm = None
         Settings.embed_model = None
         text_store = QdrantVectorStore(
-            client=client, collection_name="text_collection"
+            client=client.qdrant_client, collection_name="text_collection"
         )
         image_store = QdrantVectorStore(
-            client=client, collection_name="image_collection"
+            client=client.qdrant_client, collection_name="image_collection"
         )
 
         storage_context = StorageContext.from_defaults(
@@ -90,21 +106,17 @@ def get_retriever_engine_from_local():
     return 200, {"retriever_engine":retriever_engine, "client": client, "index":index}
 
 
-def update_nodes(file_path, image_folder, text_folder, cli_json):
+def update_nodes(file_path, _answer, cli_json):
     file_list = [file_path]
     client = cli_json["client"]
     index = cli_json["index"]
     try:
         documents = SimpleDirectoryReader(input_files=file_list).load_data()
-        if image_folder is not None and text_folder is not None:
-            for item in range(len(documents)):
-                dir_file_img = os.listdir(f"storage/decompress/{image_folder}")
-                dir_file_text = os.listdir(f"storage/decompress/{text_folder}")
-                img_lastfix = dir_file_img[-1].split(".")[-1]
-                text_lastfix = dir_file_text[-1].split(".")[-1]
-                documents[item].metadata['file_name_img'] = file_list[item].replace(text_folder, image_folder).replace(text_lastfix,img_lastfix)
-                documents[item].metadata['file_name_text'] = file_list[item].replace(image_folder, text_folder).replace(img_lastfix,text_lastfix)
-
+        for item in range(len(documents)):
+            documents[item].metadata['file_name_img'] = file_path[0]
+            with open(file_path[0].replace(".jpg",".txt"), "r", encoding="utf-8") as f:
+                f.write(_answer)
+            documents[item].metadata['file_name_text'] = file_path[0].replace(".jpg",".txt")
         parser = SentenceSplitter()
         nodes = parser.get_nodes_from_documents(documents)
         index.insert_nodes(nodes=nodes)
@@ -119,7 +131,7 @@ def update_nodes(file_path, image_folder, text_folder, cli_json):
 def get_retriever_engine(path, image_folder, text_folder):
     file_list = get_all_files(path)
     try:
-        client = qdrant_client.QdrantClient(path="qdrant_mm_db")
+        client = Client() #qdrant_client.QdrantClient(path="qdrant_mm_db")
         Settings.llm = None
         Settings.embed_model = None
         documents = SimpleDirectoryReader(input_files=file_list).load_data()
@@ -137,10 +149,10 @@ def get_retriever_engine(path, image_folder, text_folder):
         nodes = parser.get_nodes_from_documents(documents)
 
         text_store = QdrantVectorStore(
-            client=client, collection_name="text_collection"
+            client=client.qdrant_client, collection_name="text_collection"
         )
         image_store = QdrantVectorStore(
-            client=client, collection_name="image_collection"
+            client=client.qdrant_client, collection_name="image_collection"
         )
 
         storage_context = StorageContext.from_defaults(

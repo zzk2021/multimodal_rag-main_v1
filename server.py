@@ -19,41 +19,59 @@ elif model_name == "MiniCPM":
 elif model_name == "LLaVA-HD":
     llm = LLaVAHD()
 
-def complex_analysis(retriever_engine_dict,query_str, image, image_file_name):
+def complex_analysis(retriever_engine_dict, query_str, image, image_file_name):
     retriever_engine = retriever_engine_dict["retriever_engine"]
-    img, txt = retrieve(retriever_engine, query_str)
+    img = []
+    txt = []
+    if query_str != "":
+        img, txt = retrieve(retriever_engine, query_str)
 
     if image is not None and img == []:
         # image 检索image只取image检索结果，忽略文本检索结果
+        print("image 检索image只取image检索结果，忽略文本检索结果")
         image = Image.open(io.BytesIO(base64.b64decode(image))).convert('RGB')
         # 保存Image对象为文件
         image.save("storage/cache/%s" % (image_file_name))
         img1, txt1 = retrieve_image_to_image(retriever_engine, "storage/cache/%s"%(image_file_name))
-        img = img.extend(img1)
-        txt = txt.extend(txt1)
+        img = img1
+        txt = txt1
 
     # 只取排序后每个子列表的第一个元素
-
     if txt != []:
         txt = sorted(txt, key=lambda x: x[1], reverse=True)
         print(txt)
         txt = [item[0] for item in txt][0]
         context_str = txt
+        print("context_str", context_str)
     else:
         context_str = "没有上下文，直接回答"
-
     if img == []:
-        return  context_str, None, None
-
+        return context_str, None, None
     img = sorted(img, key=lambda x: x[1], reverse=True)
     print(img)
     img = [item[0] for item in img]
     return context_str, img, img[0]
 
-def call_LLM(prompt, image_path,image=None):
-    if image is not None:
+def call_LLM(prompt, image_path, image=None, retriever_img_path=None):
+
+    if image is not None and retriever_img_path is None:
         image = Image.open(io.BytesIO(base64.b64decode(image))).convert('RGB')
         image.save(image_path)
+
+    if image is not None and retriever_img_path is not None:
+        image1 = Image.open(io.BytesIO(base64.b64decode(image))).convert('RGB')
+        image2 = Image.open(retriever_img_path)
+        # Calculate the width and height of the new image
+        new_width = image1.width + image2.width
+        new_height = max(image1.height, image2.height)
+        # Create a new image with the calculated dimensions
+        new_image = Image.new('RGB', (new_width, new_height))
+        # Paste images into the new image
+        new_image.paste(image1, (0, 0))
+        new_image.paste(image2, (image1.width, 0))
+        # Save the new image
+        new_image.save(image_path)
+
     if model_name == "MiniCPM2":
         response = llm.chat({0: prompt, 1:image_path})[0]
         response = response.replace("<|endoftext|>","")
@@ -177,7 +195,8 @@ def respond1(message, _chat_bot, _app_cfg, prompt):
 
     _knowledge, img, img_path = complex_analysis(_app_cfg['ret'], _question, base64_str, image_file_name)
     try:
-        _answer = call_LLM("上下文是:"+_knowledge +"。问题是：" +_question + prompt, img_path)
+        print("上下文是:"+_knowledge +"。问题是：" +_question + prompt)
+        _answer = call_LLM("Context:"+_knowledge +". Question:" +_question + prompt, img_path)
     except Exception as e:
         traceback.print_exc()
         _answer = "调用大模型出现错误，错误原因: %s"%(e.__str__())
@@ -219,7 +238,6 @@ def create_component(params):
     return gr.Button(
         value=params['value'],
         interactive=True
-
     )
 
 with gr.Blocks() as funclip_service:
