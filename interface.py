@@ -18,7 +18,7 @@ def query(message):
     """
         message: json
             question: str
-        return: Yes or No
+        return: Position
     """
 
     question = message['question']
