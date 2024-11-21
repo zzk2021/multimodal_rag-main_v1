@@ -30,7 +30,7 @@ change config/config.json  for model_LLM_path
 
 python server.py MiniCPM
 
-# run LLaVA-HD
+## run LLaVA-HD
 
 download https://huggingface.co/yifanzhang114/SliME-vicuna-7B
 
