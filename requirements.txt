@@ -16,8 +16,9 @@ einops==0.6.1
 einops-exts==0.0.4
 timm==1.0.7
 gradio_client==0.2.9
-llama-index==0.10.30
+llama-index==0.10.43
 llama-index-embeddings-clip==0.1.1
+llama-index-embeddings-huggingface==0.2.1
 gradio==4.26.0
 IPython
-llama-index-vector-stores-qdrant
+llama-index-vector-stores-qdrant==0.2.8
