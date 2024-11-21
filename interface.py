@@ -20,7 +20,6 @@ def query(message):
             question: str
         return: Position
     """
-
     question = message['question']
     # Query Q in the knowledge base {K} for the results(I, T , P , t );
     _knowledge, img, img_path = complex_analysis(retriever_engine_dict, question, None, None)
@@ -40,6 +39,8 @@ def arrived_update_and_generate(message):
     """
     base64_str = message['image']
     position = message['position']
+
+
     object = message['object']
     timestamp = message['timestamp']
     prompt = f"Left image is the newest image, right is the old image, is the two sense has the same {object}? Answer yes or no"

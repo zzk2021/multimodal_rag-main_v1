@@ -224,6 +224,7 @@ class MultiModalVectorStoreIndex(VectorStoreIndex):
                     nodes,
                     embed_model=self._embed_model,
                     show_progress=show_progress,
+
                 )
                 # TODO: refactor this change of image embed model to same as text
                 self._image_embed_model = self._embed_model

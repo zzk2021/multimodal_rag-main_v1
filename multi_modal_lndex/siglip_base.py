@@ -11,10 +11,7 @@ from PIL import Image
 import os
 
 from transformers import AutoModel, AutoProcessor
-
 logger = logging.getLogger(__name__)
-
-
 AVAILABLE_CLIP_MODELS = (
     "RN50",
     "RN101",
@@ -29,15 +26,7 @@ AVAILABLE_CLIP_MODELS = (
 with open('config/config.json') as user_file:
     config = user_file.read()
 config = json.loads(config)
-# {
-#   "name": "John",
-#   "age": 50,
-#   "is_married": false,
-#   "profession": null,
-#   "hobbies": ["travelling", "photography"]
-# }
 DEFAULT_CLIP_MODEL = config["vis_model_path"]
-
 class SiglipEmbedding(MultiModalEmbedding):
     """CLIP embedding models for encoding text and image for Multi-Modal purpose.
 
@@ -112,7 +101,6 @@ class SiglipEmbedding(MultiModalEmbedding):
         return self._get_query_embedding(query)
 
     def _get_text_embedding(self, text: str) -> Embedding:
-        print(text)
         return self._get_text_embeddings([text])[0]
 
     def _get_text_embeddings(self, texts: List[str]) -> List[Embedding]:
@@ -127,17 +115,13 @@ class SiglipEmbedding(MultiModalEmbedding):
 
     def _get_query_embedding(self, query: str) -> Embedding:
         return self._get_text_embedding(query)
-
     # IMAGE EMBEDDINGS
-
     async def _aget_image_embedding(self, img_file_path: ImageType) -> Embedding:
         return self._get_image_embedding(img_file_path)
 
     def _get_image_embedding(self, img_file_path: ImageType) -> Embedding:
         import torch
         with torch.no_grad():
-           # print(img_file_path)
             image = self._preprocess(images=Image.open(img_file_path).convert("RGB"), padding="max_length", return_tensors="pt")
             image['pixel_values'] = image['pixel_values'].to(self._device)
-            #print(image['pixel_values'].shape)
             return self._model.vision_model(**image)['pooler_output'].tolist()[0]

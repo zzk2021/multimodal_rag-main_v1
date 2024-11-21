@@ -7,7 +7,7 @@ from PIL import Image
 from llama_index.core.base.llms.types import LLMMetadata, CompletionResponse, ChatResponse, CompletionResponseGen
 from llama_index.core.llms import CustomLLM
 from llama_index.core.llms.callbacks import llm_completion_callback
-from transformers import TextStreamer, AutoModel, AutoTokenizer, LlamaTokenizer, LlamaForCausalLM
+from transformers import TextStreamer, AutoModel, AutoTokenizer, LlamaTokenizer, LlamaForCausalLM, AutoModelForCausalLM
 
 from LLM.MobileVLM.mobilevlm.conversation import SeparatorStyle
 from LLM.SliME.llava.mm_utils import get_model_name_from_path as get_model_name_from_path_SLIME
@@ -41,7 +41,6 @@ class MobileVLM():
     def __init__(self, model_path=DEFAULT_LLM_MODEL):
         super().__init__()
         model_name = model_path.split('/')[-1]
-        print(model_path)
         disable_torch_init()
         tokenizer, model, image_processor, context_len = load_pretrained_model_mobileVLM(model_path, False,
                                                                                False)
@@ -54,6 +53,7 @@ class MobileVLM():
         self.top_p =  None
         self.num_beams = 1
         self.max_new_tokens = 512
+
     @property
     def metadata(self) -> LLMMetadata:
         """Get LLM metadata."""
@@ -73,7 +73,7 @@ class MobileVLM():
         # 完成函数
         prompt, image = prompt[0], prompt[1]
         conv = conv_templates_mobileVLM["v1"].copy()
-        print(image)
+
         if image is not None:
             images = [Image.open(image).convert("RGB")]
             images_tensor = process_images_mobileVLM(images, self.image_processor,self.model.config).to(self.model.device, dtype=torch.float16)
@@ -127,7 +127,7 @@ class MiniCPM(CustomLLM):
     def __init__(self, pretrained_model_name_or_path=DEFAULT_LLM_MODEL):
         super().__init__()
         # GPU方式加载模型
-        self.model = AutoModel.from_pretrained(pretrained_model_name_or_path, trust_remote_code=True,device_map="cuda:0")
+        self.model = AutoModelForCausalLM.from_pretrained(pretrained_model_name_or_path, trust_remote_code=True,device_map="cuda:0" )
         self.tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name_or_path, trust_remote_code=True)
 
     @property

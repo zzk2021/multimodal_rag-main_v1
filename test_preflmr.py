@@ -25,7 +25,7 @@ model = FLMRModelForRetrieval.from_pretrained(
 image_processor = AutoImageProcessor.from_pretrained(image_processor_name)
 Q_pixel_values = torch.zeros(1, 3, 224, 224)
 
-D_encoding = context_tokenizer(["a apple in here","aaaaa"])
+D_encoding = context_tokenizer(["a apple in","aaaaa","sssss"])
 context_input_ids = D_encoding['input_ids']
 context_attention_mask = D_encoding['attention_mask']
 
@@ -33,11 +33,9 @@ Q_encoding = query_tokenizer(["a apple in here"])
 qcontext_input_ids = Q_encoding['input_ids']
 qcontext_attention_mask = Q_encoding['attention_mask']
 
-
 text_embeddings = model.doc(input_ids=context_input_ids, attention_mask=context_attention_mask)
-
-Q_duplicated = model.query(input_ids=qcontext_input_ids, attention_mask=qcontext_attention_mask)
-
-print(text_embeddings.late_interaction_output.shape)
-print(text_embeddings.context_mask)
-print(Q_duplicated.late_interaction_output.shape)
+D, D_mask = text_embeddings.late_interaction_output, text_embeddings.context_mask
+Q_duplicated = model.query(input_ids=qcontext_input_ids, attention_mask=qcontext_attention_mask, concat_output_from_vision_encoder=False).late_interaction_output
+Q_duplicated = Q_duplicated.repeat_interleave(3, dim=0).contiguous()
+scores = model.score(Q_duplicated, D, D_mask)
+print(scores)

@@ -1,3 +1,6 @@
+import os
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
+
 import shutil
 import traceback
 
@@ -5,7 +8,8 @@ import gradio as gr
 from gradio.components.chatbot import FileMessage
 from gradio.data_classes import FileData
 
-from build_rag import retrieve, get_retriever_engine, retrieve_image_to_image, get_retriever_engine_from_local
+from build_rag import retrieve, get_retriever_engine, retrieve_image_to_image, get_retriever_engine_from_local, \
+    retrieve_json
 from PIL import Image
 import numpy as np
 import sys
@@ -21,11 +25,11 @@ elif model_name == "LLaVA-HD":
 
 def complex_analysis(retriever_engine_dict, query_str, image, image_file_name):
     retriever_engine = retriever_engine_dict["retriever_engine"]
+    json_response = retrieve_json(retriever_engine_dict["json_engine"],query_str)
     img = []
     txt = []
     if query_str != "":
         img, txt = retrieve(retriever_engine, query_str)
-
     if image is not None and img == []:
         # image 检索image只取image检索结果，忽略文本检索结果
         print("image 检索image只取image检索结果，忽略文本检索结果")
@@ -48,9 +52,8 @@ def complex_analysis(retriever_engine_dict, query_str, image, image_file_name):
     if img == []:
         return context_str, None, None
     img = sorted(img, key=lambda x: x[1], reverse=True)
-    print(img)
     img = [item[0] for item in img]
-    return context_str, img, img[0]
+    return context_str +" json:" + str(json_response), img, img[0]
 
 def call_LLM(prompt, image_path, image=None, retriever_img_path=None):
 
@@ -72,7 +75,7 @@ def call_LLM(prompt, image_path, image=None, retriever_img_path=None):
         # Save the new image
         new_image.save(image_path)
 
-    if model_name == "MiniCPM2":
+    if model_name == "MiniCPM" or model_name == "MiniCPM2":
         response = llm.chat({0: prompt, 1:image_path})[0]
         response = response.replace("<|endoftext|>","")
     else:
@@ -195,8 +198,8 @@ def respond1(message, _chat_bot, _app_cfg, prompt):
 
     _knowledge, img, img_path = complex_analysis(_app_cfg['ret'], _question, base64_str, image_file_name)
     try:
-        print("上下文是:"+_knowledge +"。问题是：" +_question + prompt)
-        _answer = call_LLM("Context:"+_knowledge +". Question:" +_question + prompt, img_path)
+        print("指令:",prompt + "  上下文是:"+_knowledge +"  问题是：" +_question )
+        _answer = call_LLM("Prompt:"+prompt+". Context:"+_knowledge +". Question:" +_question, img_path)
     except Exception as e:
         traceback.print_exc()
         _answer = "调用大模型出现错误，错误原因: %s"%(e.__str__())
@@ -230,7 +233,6 @@ def delete_know_base(_app_cfg, _chat_bot):
         _app_cfg['ret']["client"].close()
     shutil.rmtree("storage/decompress")
     shutil.rmtree("qdrant_mm_db/collection")
-
     _chat_bot.append(('', '知识库删除成功。'))
     return _app_cfg, _chat_bot
 
@@ -249,15 +251,16 @@ with gr.Blocks() as funclip_service:
 
         with gr.Column():
             image_folder = gr.Textbox(label="image_folder",
-                                value="图像",
+                                value="image",
                                 interactive=True)
 
             text_folder = gr.Textbox(label="text_folder",
-                                value="文本",
+                                value="text",
                                 interactive=True)
+
         with gr.Column():
             prompt = gr.Textbox(label="prompt",
-                                value="你是一个导航机器人小助手。根据信息和提问回答坐标，文本中分号后面括号里为图片坐标，一个二维坐标(x,y)，供参考。",
+                                value="""You're a navigation assistant robot. Based on the information and questions, respond with coordinates if the text includes object coordinates (x, y). And a json, "name" is room name,"top_left" and "bottom_right" is the room range, "aps" is access point, "object" listed object in room.""",
                                 interactive=True)
             chat_input = gr.MultimodalTextbox(interactive=True, file_types=["image"],
                                       placeholder="输入消息或者上传图片", show_label=False)

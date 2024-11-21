@@ -11,7 +11,7 @@ from llama_index.core.callbacks.base import CallbackManager
 from llama_index.core.constants import DEFAULT_SIMILARITY_TOP_K
 from llama_index.core.data_structs.data_structs import IndexDict
 from llama_index.core.embeddings.multi_modal_base import MultiModalEmbedding
-from llama_index.core.indices.multi_modal.base import MultiModalVectorStoreIndex
+from multi_modal_lndex.base import MultiModalVectorStoreIndex
 from llama_index.core.indices.utils import log_vector_store_query_result
 from llama_index.core.schema import (
     NodeWithScore,
@@ -30,6 +30,8 @@ from llama_index.core.vector_stores.types import (
     VectorStoreQueryMode,
     VectorStoreQueryResult,
 )
+
+from multi_modal_lndex.vector_stores.vecterstore_types import FLMRPydanticVectorStore
 
 
 class FLMRMultiModalVectorIndexRetriever(MultiModalRetriever):
@@ -220,12 +222,14 @@ class FLMRMultiModalVectorIndexRetriever(MultiModalRetriever):
         self,
         query_bundle_with_embeddings: QueryBundle,
         similarity_top_k: int,
-        vector_store: BasePydanticVectorStore,
+        vector_store: FLMRPydanticVectorStore,
     ) -> List[NodeWithScore]:
-        query = self._build_vector_store_query(
-            query_bundle_with_embeddings, similarity_top_k
-        )
-        query_result = vector_store.query(query, **self._kwargs)
+        Q_encoding = self.query_tokenizer([QueryBundle])
+        qcontext_input_ids = Q_encoding['input_ids']
+        qcontext_attention_mask = Q_encoding['attention_mask']
+        query = self.model.query(input_ids=qcontext_input_ids, attention_mask=qcontext_attention_mask, concat_output_from_vision_encoder=False).late_interaction_output
+        Q_duplicated = query.repeat_interleave(len(self._docstore), dim=0).contiguous()
+        query_result = vector_store.query(Q_duplicated,  self.model,  **self._kwargs)
         return self._build_node_list_from_query_result(query_result)
 
     def _build_node_list_from_query_result(
@@ -243,6 +247,9 @@ class FLMRMultiModalVectorIndexRetriever(MultiModalRetriever):
             node_ids = [
                 self._index.index_struct.nodes_dict[idx] for idx in query_result.ids
             ]
+            for idx in query_result.ids:
+                print("idx:", idx)
+            print("node_ids:", node_ids)
             nodes = self._docstore.get_nodes(node_ids)
             query_result.nodes = nodes
         else:

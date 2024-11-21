@@ -383,6 +383,7 @@ class MultiModalVectorStoreIndex(VectorStoreIndex):
             text_nodes = self._get_node_with_embedding(
                 text_nodes, show_progress, is_image=False
             )
+            print(text_nodes)
             new_text_ids = self.storage_context.vector_stores[DEFAULT_VECTOR_STORE].add(
                 text_nodes, **insert_kwargs
             )
@@ -397,6 +398,7 @@ class MultiModalVectorStoreIndex(VectorStoreIndex):
                 show_progress,
                 is_image=True,
             )
+            print(image_nodes)
             new_img_ids = self.storage_context.vector_stores[self.image_namespace].add(
                 image_nodes, **insert_kwargs
             )
